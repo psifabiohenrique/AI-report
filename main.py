@@ -4,6 +4,11 @@ import json
 import threading
 import os
 import ollama  # Importa o módulo ollama
+from google import genai
+from google.genai import types
+from dotenv import load_dotenv
+
+load_dotenv()
 
 CONFIG_FILE = "config.json"
 
@@ -161,31 +166,46 @@ class OllamaApp:
                 messages.append({"role": "system", "content": system_prompt})
             messages.append({"role": "user", "content": user_prompt})
 
-            # Usa o cliente Python do Ollama para gerar a resposta
-            # O parâmetro 'stream=True' permite receber a resposta em partes
-            response_stream = ollama.chat(
-                model=model_ia, messages=messages, stream=True, think=True
+            # # Usa o cliente Python do Ollama para gerar a resposta
+            # # O parâmetro 'stream=True' permite receber a resposta em partes
+            # response_stream = ollama.chat(
+            #     model=model_ia, messages=messages, stream=True, think=True
+            # )
+            client = genai.Client(api_key=os.getenv("API_KEY"))
+            response_stream = client.models.generate_content_stream(
+                model="gemini-2.5-flash",
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                ),
+                contents=user_prompt,
             )
+            # for chunk in response_stream:
+            #     if "content" in chunk["message"]:
+            #         text_chunk = chunk["message"]["content"]
+            #         self.master.after(
+            #             0, self._update_response_text, text_chunk
+            #         )  # Atualiza a GUI na thread principal
 
             for chunk in response_stream:
-                if "content" in chunk["message"]:
-                    text_chunk = chunk["message"]["content"]
-                    self.master.after(
-                        0, self._update_response_text, text_chunk
-                    )  # Atualiza a GUI na thread principal
+                text_chunk = chunk.text
+                self.master.after(
+                    0, self._update_response_text, text_chunk
+                )
 
         except ollama.ResponseError as e:
             self.master.after(
                 0,
                 lambda: messagebox.showerror(
-                    "Erro Ollama", f"Ocorreu um erro na resposta do Ollama: {e}"  # noqa: F821
+                    "Erro Ollama",
+                    f"Ocorreu um erro na resposta do Ollama: {repr(e)}",  # noqa: F821
                 ),
             )
         except Exception as e:
             self.master.after(
                 0,
                 lambda: messagebox.showerror(
-                    "Erro", f"Ocorreu um erro ao chamar o Ollama: {e}"  # noqa: F821
+                    "Erro",
+                    f"Ocorreu um erro ao chamar o Ollama: {repr(e)}",  # noqa: F821
                 ),
             )
         finally:
